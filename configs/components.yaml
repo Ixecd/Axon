@@ -1,0 +1,20 @@
+components:
+  # 基础设施层（无 image，只部署 helm chart，无需 build/push）
+  - name: axon-postgres
+    type: StatefulSet
+    deps: []
+
+  - name: axon-etcd
+    type: StatefulSet
+    deps: []
+
+  # 业务服务层
+  - name: axon
+    port: 8080
+    image: axon
+    deps:
+      - axon-postgres
+      - axon-etcd
+    # strategy: rolling       # rolling（默认）/ blue-green / canary
+    # api_version: v1         # 对外 API 版本，用于 kp compat 依赖检查
+

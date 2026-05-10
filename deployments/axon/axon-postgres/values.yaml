@@ -1,0 +1,3 @@
+storage: 1Gi
+postgres:
+  password: pass  # 生产环境请务必修改

@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: axon
+    kubepivot.io/name: {{ .Chart.Name }}
+    kubepivot.io/instance: {{ .Release.Name }}
+    kubepivot.io/version: {{ .Chart.AppVersion }}
+    app.kubernetes.io/managed-by: kp
+    version: {{ .Values.image.tag | default .Chart.AppVersion }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: axon
+  template:
+    metadata:
+      labels:
+        app: axon
+        version: {{ .Values.image.tag | default .Chart.AppVersion }}
+    spec:
+      serviceAccountName: axon
+      automountServiceAccountToken: {{ .Values.rbac.create }}
+      initContainers:
+        - name: wait-postgres
+          image: busybox:1.35
+          command: ['sh', '-c', 'count=0; until nc -z axon-postgres 5432; do count=$((count+1)); if [ $count -gt 30 ]; then echo "timeout waiting for postgres"; exit 1; fi; echo waiting for postgres; sleep 2; done']
+        - name: wait-etcd
+          image: busybox:1.35
+          command: ['sh', '-c', 'count=0; until nc -z axon-etcd 2379; do count=$((count+1)); if [ $count -gt 60 ]; then echo "timeout waiting for etcd"; exit 1; fi; echo waiting for etcd; sleep 2; done']
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.port }}
+              protocol: TCP
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            readOnlyRootFilesystem: {{ .Values.securityContext.readOnlyRootFilesystem }}
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          env:
+            - name: DB_USER
+              value: {{ .Values.db.user | quote }}
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: axon-postgres-auth
+                  key: password
+            - name: DB_HOST
+              value: axon-postgres
+            - name: DB_NAME
+              value: axon
+            - name: DB_SSLMODE
+              value: {{ .Values.db.sslmode | quote }}
+            - name: ETCD_ENDPOINTS
+              value: axon-etcd:2379
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: {{ .Values.service.port }}
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: {{ .Values.service.port }}
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}

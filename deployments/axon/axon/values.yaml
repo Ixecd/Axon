@@ -1,0 +1,36 @@
+replicaCount: 1
+
+image:
+  repository: qingchun22/axon-arm64
+  pullPolicy: Always
+  tag: ""
+
+service:
+  type: ClusterIP
+  port: 8080
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+securityContext:
+  readOnlyRootFilesystem: true  # 改为 true 可加强安全，但需确保服务不写本地文件
+
+rbac:
+  create: false
+  roles:
+    # - name: config-reader
+    #   apiGroups: [""]
+    #   resources: ["configmaps"]
+    #   verbs: ["get", "list"]
+
+db:
+  user: "user"
+  sslmode: "disable"  # 生产环境建议 require
+env:
+  - name: ETCD_ENDPOINTS
+    value: "axon-etcd:2379"

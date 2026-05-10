@@ -1,0 +1,10 @@
+✅ {{ .Release.Name }} 部署成功！
+
+命名空间: {{ .Release.Namespace }}
+版本:     {{ .Values.image.tag | default .Chart.AppVersion }}
+时间:     {{ now | date "2006-01-02 15:04:05" }}
+
+快速访问:
+  kubectl get pods -n {{ .Release.Namespace }}
+  kubectl logs -n {{ .Release.Namespace }} deployment/axon
+  kubectl port-forward -n {{ .Release.Namespace }} deployment/axon {{ .Values.service.port }}:{{ .Values.service.port }}

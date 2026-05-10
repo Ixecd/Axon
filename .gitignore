@@ -1,12 +1,14 @@
 .DS_Store
+*.DS_Store
+**/.DS_Store
 
-*.etcd/
-member/
-data.etcd/
+.vscode
 
-*.wal
-*.snap
+*.bak
+*.bak.baksbom-*.json
 
-*.log
+*.py
 
-.vscode/
+# benchmark results 数据文件不进仓库，只留 .gitkeep
+benchmark/results/*
+!benchmark/results/.gitkeep

@@ -1,0 +1,7 @@
+apiVersion: v2
+name: axon
+description: axon business service
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+dependencies: []

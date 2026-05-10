@@ -1,0 +1,7 @@
+apiVersion: v2
+name: axon-etcd
+description: etcd StatefulSet for axon
+type: application
+version: 0.1.0
+appVersion: "v3.5.14"
+dependencies: []

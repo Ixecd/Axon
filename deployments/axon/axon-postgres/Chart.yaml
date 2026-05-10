@@ -1,0 +1,7 @@
+apiVersion: v2
+name: axon-postgres
+description: PostgreSQL StatefulSet for axon
+type: application
+version: 0.1.0
+appVersion: "16-alpine"
+dependencies: []

@@ -1,0 +1,14 @@
+# 业务服务默认不需要访问 K8s API，因此不绑定任何 RBAC 规则。
+# 如果你的服务需要访问 ConfigMap、Secret 或其他 K8s 资源，
+# 请将 values.yaml 中的 rbac.create 设为 true，并取消下面规则的注释。
+#
+# 示例：读取当前 namespace 的 ConfigMap
+# apiVersion: rbac.authorization.k8s.io/v1
+# kind: Role
+# metadata:
+#   name: axon-reader
+#   namespace: {{ .Release.Namespace }}
+# rules:
+#   - apiGroups: [""]
+#     resources: ["configmaps"]
+#     verbs: ["get", "list"]

@@ -326,7 +326,169 @@ Sprint 3: Tauri app shell, embed trading chart (DEX API), POST transfer demo
 
 ---
 
-## 八、命令
+## 八、前端/客户端 铁栈
+
+技能复用 + 零 bloat。React 生态全端覆盖，不学 QML/C++。
+
+| 层 | 栈 | 理由 |
+|----|----|------|
+| Web | React 18 + Vite + Tailwind | HMR 秒热，组件化 pay UI，trading chart (Recharts/D3)，4 接口 mock |
+| Mobile | Capacitor (WebView) + React | iOS/Android 一码双端，plugin (camera/biometric for MPC seed) |
+| Desktop | Tauri v2 (Rust backend + Web frontend) | 5MB 二进制（vs Electron 200MB），Rust tonic client 直连 protocol，file/biometric secure |
+| State/Offline | Zustand + IndexedDB | tx draft / offline sig preview |
+| gRPC Client | `@trpc/client` or `tonic-web` | WebSocket gRPC，protocol `/transfer` stream |
+
+### Tauri vs Qt
+
+| 维度 | Tauri | Qt |
+|------|-------|-----|
+| Size | 5-20MB | 50-200MB |
+| Lang | Web(TS)+Rust | C++/QML |
+| Skill | React 快起 | QML 2 周痛 |
+| Secure | Rust sandbox，MPC seed native | Qt signals 跨界弱 |
+| Dist | brew/appimage/apk | Qt installer 重 |
+
+**核戳**：Tauri=Rust 同语言栈，tonic client 直接复用 protocol 代码，零跨语言序列化税。
+
+### 设计系统 — Curatorial Restraint
+
+参考 CSS Design Awards 的策展式审美。暗底做画框，内容自己发光。
+
+```
+色彩:
+  bg-primary:     #0a0a0f (near-black canvas)
+  bg-card:        #14141f (card surfaces)
+  text-primary:   #f4f4f5 (white body)
+  text-secondary: #71717a (dim metadata, dates, labels)
+  accent-gold:    #c9a84c (WOTD monogram — Axon "verified tx" badge)
+  accent-teal:    #2dd4bf (speed metric — fast route indicator)
+  accent-rose:    #f43f5e (cost warning — gas spike alert)
+
+字体:
+  Display:   Inter (headings, amounts, scores)
+  Mono:      JetBrains Mono (tx hashes, gas, addresses)
+  Size ramp: 12/14/16/20/28/40 px
+
+间距:
+  Section gap:  80-120px
+  Card padding: 24px
+  Grid gap:     16px (3-col nominee grid)
+  内容 max-w:    1200px (controlled line length)
+
+动画 (subtle, never gratuitous):
+  Card hover:    scale(1.02) + shadow elevation, 200ms ease-out
+  Page enter:    fade-up 400ms (Intersection Observer)
+  Score bar:     width 0→target, 600ms ease-out (viewport trigger)
+  Link icon:     opacity 0→1 on card hover
+  Scroll:        smooth-scroll anchor
+
+卡片体系:
+  Transfer card:  thumbnail (chain icon) + title (amount) + metadata (gas, route) + score badge
+  Nominee grid:   3-col, uniform aspect ratio (object-fit: cover)
+  Score bento:    metric row (UI/UX/INN → Speed/Cost/Safety)，decimal precision (8.09 not 8)
+
+核原则:
+  "Make the transfer transparent and the data heroic."
+  暗底 → 交易卡片发光 → 数字精确到小数点 → 全链路可溯源
+```
+
+### Axon 设计映射
+
+| CSSDA 元素 | Axon 等价 |
+|-----------|----------|
+| WOTD monogram (金) | Verified tx badge (金 accent) |
+| Judge score cards | Route score breakdown (Speed/Cost/Safety) |
+| Nominee thumbnail grid | Transfer history cards |
+| Decimal scores (8.09) | Gas cost precision (2 decimal) |
+| Dark gallery frame | Dark financial dashboard |
+| Judge headshot + name | Validator/MPC signer identity |
+
+### 暖调诗歌 — Onboarding & 品牌层
+
+参考 RabenRifaie 的画廊式叙事。Dashboard 用暗底策展，品牌/onboarding 用暖调人性。
+
+```
+暖调色彩 (品牌层):
+  bg-warm:       #faf7f2 (warm off-white, gallery wall)
+  primary-sage:  #97ac87 (RabenRifaie 同款 — Axon "confirmed" green)
+  text-warm:     #3d3929 (dark olive, softer than pure black)
+  accent-clay:   #c49a6c (CTA buttons, warmth vs cold finance)
+  border-warm:   #e8e0d5 (subtle card borders)
+
+品牌层 vs Dashboard 层:
+  Onboarding/Landing/Profile → 暖调 (RabenRifaie)：诗意，人性，画廊漫步
+  Dashboard/Trading/History  → 暗底 (CSSDA)：精密，策展，数据发光
+
+字体分层:
+  Brand:    Playfair Display (serif hero — "Send value, not transactions")
+  UI:       Inter (nav, buttons, amounts)
+  Mono:     JetBrains Mono (hashes, gas)
+
+### 字体三件套 — 辨识帝
+
+编码用 Fira Code（ligature 连字 `!=`→`≠` 编码爽），但 UI 必须换——连字在钱包地址里 `x`→`×` 是血案。
+
+| 层 | 字体 | 为什么 |
+|----|------|-------|
+| Sans (UI) | **Inter** | Stripe/Vercel/GitHub 在用。x-height 高，小屏 label 清晰。可变字体，全 weight <300KB |
+| Mono (hash) | **JetBrains Mono** | `0` 中间点 vs `O`，`1` `l` `I` 三字符各自可辨识。ligature 默认关闭，copy-paste 不乱码 |
+| Serif (brand) | **Playfair Display** | "Send value, not transactions" 衬线体才有仪式感 |
+
+```js
+// tailwind.config.js
+module.exports = {
+  theme: {
+    fontFamily: {
+      sans:  ['Inter', 'system-ui', 'sans-serif'],
+      mono:  ['JetBrains Mono', 'ui-monospace', 'monospace'],
+      serif: ['Playfair Display', 'Georgia', 'serif'],
+    }
+  }
+}
+```
+
+```css
+/* index.css */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Playfair+Display:wght@600;700&display=swap');
+```
+
+```html
+<h1 class="font-serif text-4xl">Send value, not transactions</h1>
+<p class="font-sans">0.00123 ETH</p>
+<code class="font-mono">0x7fa2b3c4...def (2.5 gwei)</code>
+```
+
+Tauri bundle：`tauri.conf.json` → `assets/fonts/` 本地化，三文件 <500KB，offline 零网。iOS Capacitor 用 SF Pro fallback 无额外下载。
+
+叙事节奏 (章节式，非无尽滚动):
+  Landing:
+    nav (logo + "Pay" "Swap") →
+    single-word CTA: "Send" →
+    三行诗: "Simple transfers. / Smart routing. / Self custody."
+    →
+    tagline →
+
+  Onboarding:
+    1 screen = 1 action, 呼吸感
+    "Almost done" → "Drink e-coffee with us" 类口语化 CTA
+
+动画 (慢, 大气, 600-900ms ease-out):
+  背景层: 暖调微纹理 (grain/noise overlay, CSS background-blend-mode)
+  滚动:   章节式进入，段落 fade-up 400ms，交错 stagger 80ms/child
+  品牌色: on scroll 从暖调 sage 渐变为 dashboard 暗底
+```
+
+### Axon 双模设计
+
+| 场景 | 模式 | 参考 | 色彩 | 情绪 |
+|------|------|------|------|------|
+| Landing / Onboarding | 暖调画廊 | RabenRifaie | sage + clay + warm white | 人性、信任、低门槛 |
+| Dashboard / History | 暗底策展 | CSSDA | near-black + gold/teal | 精密、透明、可审计 |
+| Transfer confirm | 暖→暗过渡 | 两者融合 | 提交前暖，确认后暗底卡片 | 仪式感：签名=承诺 |
+
+---
+
+## 九、命令
 
 ```bash
 cargo clippy --fix --all-targets -- -D warnings
@@ -338,7 +500,7 @@ cargo audit              # weekly
 cargo deny check         # license + crypto whitelist
 ```
 
-## 九、FORGET 节奏
+## 十、FORGET 节奏
 
 每周 `cargo audit` + `cargo deny` + grep `TODO|FIXME|unsafe`。P0=0 才 merge。
 P0 = S+ 正确性项，P1 = A 延迟项。B 是 debt metric 不设 P-level。

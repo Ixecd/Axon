@@ -1,0 +1,26 @@
+feat(docs): AXON_PHILOSOPHY v3 — design system + frontend stack + positioning
+
+Design system (dual-mode):
+  Warm gallery (RabenRifaie)    — Landing/Onboarding, sage #97ac87 + clay,
+                                   poetic pacing, single-word CTA
+  Dark curatorial (CSSDA)       — Dashboard/Trading, near-black + gold/teal,
+                                   decimal precision, bento score cards
+  Transfer confirm              — warm→dark transition, sig=commit ritual
+
+Frontend/client stack:
+  Web       React 18 + Vite + Tailwind (HMR, chart, 4-interface mock)
+  Mobile    Capacitor + React (iOS/Android single codebase)
+  Desktop   Tauri v2 (5MB binary, Rust tonic client reuse)
+  State     Zustand + IndexedDB (offline draft)
+  gRPC      tonic-web (WebSocket stream)
+
+Positioning hardened:
+  S0 Axon=smart transfer engine — transfer core unshaken
+  Trading=shell, platform never matches/holds
+  "self-custody, platform does not hold or match"
+
+Sprint reshaped:
+  S1 router + single-chain tx, S2 MPC sig real GG20,
+  S3 Tauri app + trading chart embed
+
+Co-Authored-By: DeepSeek

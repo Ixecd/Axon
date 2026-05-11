@@ -1,9 +1,54 @@
 # Axon Rust 开发哲学 & 规范指南 😈✊
 
 > 作者：庆春镜像 + DeepSeek | 日期：2026-05-11 | 版本：v2 锐评修正版
-> 核心：**Correctness First • 业务脏=燃料 • 金融压制** — MPC+AA 非托管核，Rust 铁律执行，像微信但链上杀手。
+> 核心：**转账引擎 • 炒币壳 • 平台不持不撮** — MPC+AA 非托管核，Rust 铁律执行，像微信但链上杀手。
 > 适用：Axon Protocol (router/mpc/paymaster/bridge)，Rust 1.80+。
 > 原则：**零自欺** — 代码=产品，债不堆，数字非纳秒迷信是可测边界。
+
+---
+
+## 零、Axon 是什么 — 聪明的转账引擎
+
+**核心永不动摇：转账。** 炒币、跨链、支付——全是同一件事的不同壳：`transfer(from, to, amount, chain)`。
+
+```
+用户看到的              Axon 实际做的
+─────────────────────────────────────────
+买 ETH              USDC → DEX swap (contract call)
+跨链换币            USDC(Eth) → Bridge → USDC(Polygon)
+提现                MPC 签名 → 链上广播交易
+炒币盈亏            转账历史 × Oracle 价格 = PnL 展示
+```
+
+平台不做的事：
+- **不撮合** — 用户 self-custody order，AA batch sig 提交到链上 DEX
+- **不清算** — 链本身就是结算层，Axon 只是路由 + Gas 代付
+- **不持仓** — 零 CEX 仓位风险，资金始终在用户 AA 钱包
+
+架构锚定：
+
+```
+Axon App (Flutter/Tauri)
+├── UI: Pay / Transfer / Swap (4 接口)
+│   └── Trading Shell: 撮合 view (CLOB UI, 非平台撮合)
+├── Protocol (Rust tonic gRPC)
+│   ├── Transfer Core (MPC sig + paymaster)
+│   └── Router (最优链 + bridge)
+└── Blitz Infra (etcd/JRaft HA)
+```
+
+**转账核**：`POST /transfer` — MPC<200ms，Gas 代付，跨链 Stargate。
+**炒币壳**：app 内 book view，用户自托管 order，平台零风控仓位。
+
+风控 bounded（非全 CEX）：
+
+| 层 | 风控 | 组件 |
+|----|------|------|
+| 转账核 | 异常 vol/velo/重放 | JRaft 状态 + Aeron alert |
+| 炒币壳 | UI order filter (pos limit) | 撮合 pre-match (local book) |
+| 清结算 | Gas vault + bridge finality | Oracle 对冲 + multi-sig |
+
+铁文案：**"self-custody，平台不持不撮。"**
 
 ---
 
@@ -260,22 +305,23 @@ impl Router {
 
 ---
 
-## 七、Sprint 1 铁律
+## 七、Sprint 铁律
 
 ```
-目标: router + 单链 tx 跑通 (axum HTTP → 后续切 tonic)
-时间: 1 天 prototype
-验收:
-  [ ] Router score 10 链 <5ms (criterion bench)
-  [ ] RPC quorum 3中2 检测 RPC 异常返回
-  [ ] Mock Gas spike → Paymaster pre-est 拒绝
-  [ ] kp deploy → chaos-mesh kill pod → metrics 不丢
-  [ ] cargo-fuzz router input 1h 零 crash
+Sprint 1: router + 单链 tx (axum HTTP → sprint 2 切 tonic)
+  验收: Router score <5ms, RPC quorum 3中2, Gas spike mock, chaos pass
+
+Sprint 2: MPC sig mock → real GG20, tonic gRPC server
+
+Sprint 3: Tauri app shell, embed trading chart (DEX API), POST transfer demo
+
+平台线: POST /transfer — MPC<200ms, Gas代付, 跨链 Stargate
+壳线:   炒币 view (CLOB UI), self-custody order, AA batch sig, 平台不撮
 
 不做的:
-  ✗ MPC sig（sprint 2）
-  ✗ Bridge Stargate 真连接（mock 先）
-  ✗ AA 合约部署（testnet 后）
+  ✗ 撮合引擎 (链上 DEX 已有)
+  ✗ 清结算系统 (链本身就是)
+  ✗ CEX 仓位管理 (绝不)
 ```
 
 ---

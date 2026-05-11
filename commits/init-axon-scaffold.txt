@@ -1,0 +1,27 @@
+feat(Axon): init Rust scaffold — ADR 001-005 + RUST_PHILOSOPHY v2
+
+Axon Protocol v0.1 sprint 1 prep.
+
+ADR (docs/design/):
+  001-mpc     GG20 t=2/n=3, <200ms pipeline pre-sign batch
+  002-aa      ERC-4337 v0.7 EntryPoint + Paymaster + Session Key
+  003-router  多链路由 0.6/0.3/0.1 评分 + Oracle quorum 3中2
+  004-gas     独立金库多签 + 安全系数 1.5 + Oracle 记账对冲
+  005-bridge  Stargate 主/CBridge 备，责任边界写死
+
+RUST_PHILOSOPHY v2 (锐评修正):
+  S+/A/B Tier 铁锁 (正确性 > 延迟 > 效率)
+  戳宗教: 数字非纳秒迷信，criterion bench CI fail 门控
+  业务脏核心章: 半夜错链/Bridge卡/Gas不够/RPC谎/重放超时 5场景
+  升维推: KubePivot=cloud runtime, Axon=financial runtime 双帝炼狱
+  Sprint 1: router+单链 tx, 注入脏 (RPC mock/Gas spike), chaos验收
+
+工程基础:
+  Cargo.toml     edition 2021, tokio+tonic+axum 双栈, object-pool
+  src/main.rs    axum health check (v1 HTTP, sprint 2 切 tonic)
+
+KubePivot 同构:
+  状态机 FSM → MPC 轮次   /   分片 Lease → key shard
+  双保险 Detector → RPC quorum   /   降级链 → bridge fallback
+
+Co-Authored-By: DeepSeek <deepseek@axon-protocol.ai>

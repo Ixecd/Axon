@@ -9,6 +9,9 @@
 
 *.py
 
+# Rust build artifacts
+target/
+
 # benchmark results 数据文件不进仓库，只留 .gitkeep
 benchmark/results/*
 !benchmark/results/.gitkeep

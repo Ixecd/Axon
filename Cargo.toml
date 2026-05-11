@@ -1,10 +1,46 @@
 [package]
 name = "axon"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 
 [dependencies]
+# HTTP (v1 axum — future: tonic gRPC)
 axum = "0.8"
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+
+# gRPC (ADR 001-005 tonic architecture)
+tonic = "0.11"
+prost = "0.12"
+prost-types = "0.12"
+
+# observability
+tracing = "0.1"
+tracing-subscriber = "0.3"
+
+# error handling
+thiserror = "1"
+anyhow = "1"
+
+# perf: zero-copy buffer (BytesMut 自带内部池化, 无需额外 pool crate)
+bytes = "1"
+
+# oracle (gas price / bridge health)
+reqwest = { version = "0.12", features = ["json"] }
+
+# deterministic seeded RNG only — NO rand::thread_rng in hotpath
+rand = "0.8"
+
+[build-dependencies]
+tonic-build = "0.11"
+
+[dev-dependencies]
+tokio-test = "0.4"
+proptest = "1"
+criterion = "0.5"
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"

@@ -1,0 +1,4 @@
+docs(mistakes): add centralized repeat-error tracking log
+
+从 AXON_PHILOSOPHY 迁出 Go→Rust 过渡坑，按领域分类建立错误日志。
+规则：重复 ≥ 2 次才入册，单次观察、重复曝光认知盲区后显式化消除。

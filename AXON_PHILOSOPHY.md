@@ -196,26 +196,9 @@ Sprint 1 策略:
 
 ---
 
-## 四、Go→Rust 过渡坑
+## 四、Go→Rust 过渡坑 → 已迁移至 [MISTAKES.md](./MISTAKES.md)
 
-```
-Go 自然写法              Rust 等价 / 坑
-─────────────────────────────────────────────────────
-smLock.Lock()            let guard = self.sm.lock().await;
-defer smLock.Unlock()    // tokio::Mutex guard 不能跨 await 点持有
-                          // std::Mutex guard 不能跨 .await
-                          解: enum StateMachine + mem::replace
-
-fmt.Errorf(...)          anyhow::bail!(...) 或 anyhow::anyhow!(...)
-                         坑: bail! 需要 use anyhow::bail;
-
-goroutine + channel      tokio::spawn + tokio::select!
-                         坑: spawned task 的 JoinHandle 必须 await 或 abort
-                         否则 task panic 被静默吞
-
-var newFunc = realImpl   函数变量注入 (KubePivot 模式)
-test: newFunc = fake     Rust: trait + Box<dyn Fn> 注入，不用全局 var
-```
+> 重复性工程错误统一记录在 MISTAKES.md，按领域分类，重复 ≥ 2 次才入册。
 
 ---
 

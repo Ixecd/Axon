@@ -8,6 +8,7 @@
 
 ## 目录
 - [Rust 语言陷阱](#rust-语言陷阱)
+- [infra→业务 转型陷阱](#infra业务-转型陷阱)
 - [kp / KubePivot 工具链](#kp--kubepivot-工具链)
 - [Kubernetes / Helm](#kubernetes--helm)
 - [Docker / 镜像构建](#docker--镜像构建)
@@ -48,6 +49,39 @@
 - **根因**: Go 惯用的 `var newFunc = realImpl; test: newFunc = fake` 是包级可变变量，Rust 的 static mut 必须 unsafe 且不是 Send/Sync 安全的。
 - **解法**: trait + `Box<dyn Fn>` 注入。定义 trait 作为依赖接口，生产用真实实现，测试注入 mock。类型安全、零 unsafe。
 - **重复次数**: 1
+
+---
+
+## infra→业务 转型陷阱
+
+> 首次做业务代码，infra 脑（吞吐/延迟/系统边界）容易在微观编码层踩坑。此处预埋常见陷阱，首次犯→观察，再次犯→入册。
+
+### T01: hotpath 上 premature `.collect()` 导致多余 alloc
+
+- **首次日期**: 2026-05-12
+- **症状**: `chains.iter().map(score).collect::<Vec<_>>()` 后再 `.max_by()`——分配整个 Vec 只为取极值
+- **根因**: infra 代码习惯"先收集再处理"（channel/task 通用模式）。业务热路径上 iterator 是惰性的，collect 会强制立即分配堆内存
+- **解法**: iterator chain 全程 lazy：`chains.iter().filter_map(score).max_by(cmp)`。只在需要 len/index/跨线程 send/多次迭代时才 collect。阈值：lazy chain <10μs CPU → 不 collect
+- **Tier C 锚点**: [AXON_PHILOSOPHY.md C1 惰性求值](./AXON_PHILOSOPHY.md#c1-惰性求值-lazy-first)
+- **重复次数**: 0 (首次观测)
+
+### T02: 热路径 `.unwrap()` / `.expect()` → production panic
+
+- **首次日期**: 2026-05-12
+- **症状**: 业务 handler 里 `chain.score.partial_cmp(&other.score).unwrap()`——score 为 NaN 时 panic 吞掉整个 request
+- **根因**: infra 代码可以 unwrap（启动时挂=fast fail），业务代码每个 request 独立——一个 request 的 NaN 不应 kill 服务
+- **解法**: 全部换 `?` + `AppError` 传播。`Option::ok_or(AppError::NoRoute)?` / `Result::map_err(|e| AppError::Internal(e.to_string()))?`。唯一的 unwrap 允许在 `main()` 启动阶段
+- **Tier C 锚点**: [AXON_PHILOSOPHY.md C2 链式调用](./AXON_PHILOSOPHY.md#c2-链式调用-fluent-pipeline) — "禁 unwrap/expect 在生产路径"
+- **重复次数**: 0 (首次观测)
+
+### T03: 第一版就画 trait 图 → 抽象先行
+
+- **首次日期**: 2026-05-12
+- **症状**: 还没写 3 个 concrete func 就开始定义 `trait ChainRouter` / `trait Signer` / generic bounded `<T: RouteScore>`
+- **根因**: infra 架构思维——系统设计从接口开始。但业务代码的抽象边界在第一版时是模糊的，第一版就画 trait = 猜错了就得全拆
+- **解法**: Rule of Three — 3+ 处重复代码 → trait。1-2 处重复 → 保留 concrete func，继续观测。测试覆盖 >90% 才上泛型。
+- **Tier C 锚点**: [AXON_PHILOSOPHY.md C4 必要抽象](./AXON_PHILOSOPHY.md#c4-必要抽象-rule-of-three)
+- **重复次数**: 0 (首次观测)
 
 ---
 

@@ -1,0 +1,27 @@
+feat(hotpath): Tier C+D principles + first transfer endpoint + infra traps
+
+AXON_PHILOSOPHY.md — 新增两章:
+  Tier C (热路径设计原则):
+    C1 惰性求值 — iterator chain 不 collect，OnceCell 懒 init
+    C2 链式调用 — ? 链 pipeline，禁 unwrap/expect 在生产路径
+    C3 高效内存 — Stack>Heap>Pool，Cow/BytesMut/arena/cacheline
+    C4 必要抽象 — Rule of Three，泛型 vs dyn 边界，抽象税审计
+  Tier D (Infra Token 节流):
+    刺客榜 YAML>Debug>Schema>Fixture>业务
+    Infra<20% 总 Token 预算红线
+    kp deploy 自治机器，AI 脑解放给业务
+
+MISTAKES.md — 新章"infra→业务转型陷阱":
+  T01 premature .collect() → alloc 膨胀
+  T02 hotpath .unwrap() → production panic
+  T03 第一版就画 trait 图 → 抽象先行反模式
+
+DEPENDENCY_POLICY.md — 未来候选:
+  bumpalo (arena, dev-dep) / flamegraph (L2 CLI) / valgrind massif (L2 CLI)
+
+src/ — 第一个业务代码:
+  src/error.rs     thiserror AppError + IntoResponse (HTTP status 自动映射)
+  src/transfer.rs  POST /api/v1/transfer 四步 pipeline: validate→route→sign→respond
+  src/router.rs    Chain 结构 + select(hint?) 精确匹配>最高分 + T02 unwrap→unwrap_or
+  src/lib.rs       mod error/transfer
+  src/main.rs      tracing::subscriber init + /api/v1/transfer 路由接线

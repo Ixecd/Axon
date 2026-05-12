@@ -52,9 +52,9 @@ Axon App (Flutter/Tauri)
 
 ---
 
-## 一、Tier 铁锁（S+ → A → B 优先链）
+## 一、Tier 铁锁（S+ → A → B → C → D 五层锁）
 
-优先级不是线性的是降级门槛制：**S+ 不过关不可上线，A 不达标不可规模化，B 是 debt metric 不是信仰。**
+优先级不是线性的是降级门槛制：**S+ 不过关不可上线，A 不达标不可规模化，B 是 debt metric 不是信仰，C 是热路径编码铁律，D 是 Token 预算红线。**
 
 ### S+ — 正确性（生产命门，P0=0 才 merge）
 
@@ -92,6 +92,147 @@ tracing span: <1μs overhead
          局部 opt 杀演化 > 10μs 收益。
          benchmark 是尺子不是神像。
 ```
+
+### C — 热路径设计原则（业务代码准则）
+
+Axon 热路径 = transfer/sec（目标 >1k TPS）。原则：**零 alloc / 栈优先 / 懒至终**。infra 转业务核心：别 premature abstract，先生成脏代码跑通，再 refactor。
+
+#### C1. 惰性求值 (Lazy First)
+
+```
+何时 lazy:
+  iter/filter/map 链 > 3 步 → 不 collect，直到下游需要 owned。
+  阈值: lazy 链 < 10μs CPU 时间 → 不 collect。
+
+何时 eager:
+  需要 len() / index / 多次迭代 / 跨线程 send → 才 collect。
+  例: chain config 一次性 load 后长期复用 → OnceCell<Vec<Chain>> 是合理 eager。
+```
+
+```rust
+// 坏: premature collect — 分配一个 Vec 只为取 max
+let scores: Vec<_> = chains.iter().map(score).collect();
+let best = scores.into_iter().max_by(cmp_score);
+
+// 好: lazy fuse — 计算沿链走，零 alloc
+let best = chains.iter().filter_map(score).max_by(cmp_score)?;
+```
+
+```
+懒初始化:
+  Chain config  → OnceCell<ChainRegistry> 懒 init，不定死在 new()
+  静态配置     → LazyLock / OnceLock（Rust 1.80+ std）
+  运行环境     → configs/system.yaml → 首次访问时解析，不预加载全局
+```
+
+#### C2. 链式调用 (Fluent Pipeline)
+
+```
+全 Req 处理:
+  Req::validate()?.route()?.sign()?.broadcast()
+
+Builder only for config:
+  TransferBuilder::new().chain("eth").gas(21e3).signer(key).build()?
+
+零 state pipe:
+  trait Pipeline { type In; type Out; async fn process(&self, input: Self::In) -> Result<Self::Out>; }
+  impl Pipeline for Transfer { ... }  // stateless，纯 ? 链
+
+禁:
+  ✗ 嵌套 if-else 金字塔
+  ✗ unwrap() / expect() 在生产路径
+  ✓ 纯 ? 链 + map_err / and_then
+```
+
+#### C3. 高效内存 (Stack > Heap > Pool)
+
+```
+热路径零 alloc: <10 alloc/transfer（对齐 Tier B）
+
+策略         用法               示例
+────────────────────────────────────────────
+Stack-only   小 struct <128B    #[repr(C)] struct SigCtx { buf: [u8; 64]; }
+Cow<'a>      借用优先           let payload = Cow::Borrowed(&req.data);
+BytesMut     热路径 buffer      let mut buf = BytesMut::with_capacity(1024);
+Arena        多对象同生命周期    bumpalo::Bump for 签名树
+```
+
+```
+Cache line 对齐:
+  #[repr(align(64))] struct HotPath { ... }
+  热字段聚拢，冷字段 #[repr(C)] 末尾
+
+测:
+  cargo flamegraph — 目标 <1% alloc time in hotpath
+  valgrind --tool=massif — 峰值内存曲线
+```
+
+#### C4. 必要抽象 (Rule of Three)
+
+```
+何时 abstract:
+  3+ 处类似代码 → trait
+  1-2 处重复 → 留着，观测
+
+泛型 vs dyn:
+  ┌──────────┬─────────────────────┬──────────────────┐
+  │          │ 泛型 (static dispatch)│ dyn Trait        │
+  ├──────────┼─────────────────────┼──────────────────┤
+  │ 分发     │ 零 vtable，编译时单态化 │ +8ns vtable 跳转 │
+  │ 适用     │ 调用方 ≤ 16 种       │ 多态 / mock 注入  │
+  │ 二进制   │ 每实例膨胀约 5KB     │ 不膨胀           │
+  │ Axon     │ RouteScore<T: Chain> │ OracleProvider    │
+  └──────────┴─────────────────────┴──────────────────┘
+
+抽象税:
+  每 trait +5% 编译时间，+10% 认知成本
+  测试覆盖 > 90% 才允许引入新 trait
+  每个 trait 必须在 PR 描述列出"三个具体受益者"
+
+业务 code 节奏:
+  先 concrete funcs（3 个文件内），refactor 时 abstract
+  反模式: 第一版就画 trait 图 → 不写代码先画框
+```
+
+**审计流程**: PR 必跑 `cargo criterion --bench hotpath`，diff > 5% reject。
+
+---
+
+### D — Infra Token 节流（迭代零和游戏）
+
+Token 预算是有限的。每轮 YAML 缩进调试 = 3-5x Token 乘数。Infra 不该吃掉业务思考的 Token 配额。
+
+**刺客榜 (Axon 体感)**:
+
+| 刺客 | Token 杀招 | 解药 | 节省 |
+|------|-----------|------|------|
+| YAML/Infra | 缩进敏感+全读重改循环 | `kp deploy --dry-run=client` + kustomize | -90% (CLI替10轮) |
+| Debug日志 | `kubectl logs` 噪音洪水 | `tracing::span!` JSON + `jq '.level=="error"'` | -70% (结构filter) |
+| Schema重复 | proto→Rust→TS 五遍 | `prost-build` + `schemars` auto-gen | -60% (一键派生) |
+| Test Fixture | mock state 膨胀 | `proptest` + fixture bin | -40% (gen不存) |
+| 业务代码 | 局部改，逻辑密 | borrow checker 自验 | -20% (少debug) |
+
+**核心原则：Infra < 20% 总 Token 预算。超了 = 重构 wrapper，不是熬**。
+
+```
+本地循环:  kp dev → minikube 先炸 YAML，不上 CI。
+           YAML 修改只用 overlay，patchesStrategicMerge 增量，不重写 base。
+
+日志:      RUST_LOG=error,json tracer 进 span，jq 过滤。
+           生产再开 info span，本地 debug 只调劲。
+
+Schema:    build.rs prost 一键 gen → serde derive → schemars → TS type。
+           手写一份 schema = 回溯重读 proto + rust + ts 三份。
+           一个 source of truth (.proto)，其余自动派生。
+
+审计:      日志仓内 grep 可溯源，不依赖外部链路。
+           tracing span 嵌套 = 零成本上下文，不用手动传 trace_id。
+
+红线:      roundtrip YAML > 3 轮 = 刺客赢。
+           Schema 手动同步 > 1 次 = 流程有 bug。
+```
+
+**KubePivot 在本 Tier 的角色**：Infra 自治机器。把 YAML/deploy/log 刺客外包给 kp，AI 脑解放给业务代码。`kp deploy` 已救命，后续只补增量 adapter，不再裸写 YAML。
 
 ---
 

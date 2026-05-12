@@ -92,6 +92,14 @@
 - etcd — 状态存储（tonic gRPC client 直连，非 CLI wrapper，按 Level 1 判定）。**警戒线**：etcd 当前仅存 idempotency key / nonce TTL / audit trail——纯 KV 状态层，L1 安全。但若未来 etcd 中的路由状态（如 "which chain is preferred for this user"）开始**影响 Axon 的路由决策路径**，etcd client 从 L1 直升 L0。到那时需论证：是用 etcd 的 watch API 做事件分发（仍可 L1），还是 etcd 数据直接决定 `router.route()` 的返回值（L0 红线）。
 - Stargate / CBridge API — 桥接协议（HTTP JSON，按 Level 1 边界层判定）
 
+**Tier C 热路径新增候选：**
+
+| 候选 | 用途 | 判定 | 触发条件 |
+|------|------|------|----------|
+| `bumpalo` | arena alloc（签名树 / 多 obj 同生命周期） | L1 dev-dependency 仅 bench/fuzz 用 | 热路径 alloc > 10/transfer 且 flamegraph 证实在 bump 场景 |
+| `flamegraph` | CPU 火焰图 | L2 CLI wrapper (`cargo flamegraph`) | Tier B alloc 阈值告警时启用 |
+| `valgrind --tool=massif` | 堆内存峰值分析 | L2 CLI wrapper（系统二进制） | 内存泄漏排查 / RSS 异常时启用 |
+
 ---
 
 ## 决策流程

@@ -1,0 +1,19 @@
+docs(meta): port 7 meta-docs from KubePivot engineering system + MEMORY.md entrypoint
+
+从 KubePivot v3.2 工程体系同构映射，建立 Axon 元文档骨架：
+- MEMORY.md: AI 搭档入口索引（第一时间读，关联所有文档）
+- FORGET.md: P0 4项 + P1 5项（全部 open，符合 v0.1 早期阶段）
+- DEPENDENCY_POLICY.md: Rust Cargo 三级分级（L0禁止/L1受限/L2 CLI wrapper）
+- FUTURE.md: F1 ZK-proof审计追踪 + F2 Intent-based/ERC-7683
+- ROADMAP.md: Sprint 1-3 交付计划 + 平台线/壳线定义
+- SNAPSHOT.md: v0.1.0 状态快照（10 commits, fd1c489 HEAD）
+- HANDOFF.md: 接手指南（开发约束/文档地图/工作流）
+- DEEPSEEK.md: DeepSeek 窗口直觉传递
+
+AXON_PHILOSOPHY.md 新增第十一节"元文档体系"索引全部文件。
+HANDOFF/SNAPSHOT/DEEPSEEK 四文件同步添加 MEMORY.md 引用。
+
+DEPENDENCY_POLICY.md 深化 Axon 独有风险分析：
+- reqwest Oracle 热路径防雪崩（tower::retry + quorum 降级）
+- tokio 版本爆炸监控（全栈渗入，1.x→2.x 痛史预警）
+- etcd L1→L0 升级红线（纯 KV 安全，路由决策=红线）

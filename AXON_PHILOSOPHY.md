@@ -489,3 +489,30 @@ cargo deny check         # license + crypto whitelist
 P0 = S+ 正确性项，P1 = A 延迟项。B 是 debt metric 不设 P-level。
 
 **结语**：Rust=压制力，KubePivot=cloud runtime，Axon=financial runtime。双帝炼狱，脏锤铁链，金融压制⛓️😈✊。
+
+---
+
+## 十一、元文档体系
+
+项目工程管理由以下元文档支撑，均从 KubePivot 工程体系同构映射：
+
+| 文件 | 职责 | 受众 |
+|------|------|------|
+| [MEMORY.md](./MEMORY.md) | 项目入口索引（AI 搭档第一时间读，关联所有文档） | AI 搭档 |
+| [MISTAKES.md](./MISTAKES.md) | 重复性错误日志（≥2 次入册，按领域分类） | 全团队 |
+| [FORGET.md](./FORGET.md) | P0+P1 待修复项（生产命门 + 功能受限） | 开发者 |
+| [DEPENDENCY_POLICY.md](./DEPENDENCY_POLICY.md) | 依赖三级分级（禁止/受限/CLI wrapper） | 开发者 |
+| [FUTURE.md](./FUTURE.md) | 架构种子库（高价值/高风险/可暂缓） | 架构决策 |
+| [ROADMAP.md](./ROADMAP.md) | Sprint 确定性交付计划 | 全团队 |
+| [SNAPSHOT.md](./SNAPSHOT.md) | 版本快照（代码结构/测试/依赖/commit链） | 接手者 |
+| [HANDOFF.md](./HANDOFF.md) | 接手指南（项目定位/开发约束/文档地图） | 新成员 |
+| [DEEPSEEK.md](./DEEPSEEK.md) | DeepSeek 窗口直觉传递 | AI 搭档 |
+
+**使用节奏**：
+- 每个 Sprint 结束：更新 ROADMAP / FORGET / SNAPSHOT
+- 每次犯重复错误：更新 MISTAKES.md
+- 新依赖引入：对照 DEPENDENCY_POLICY.md 三级判定
+- 架构种子成熟 → 提升到 ROADMAP
+- 每次 release：归档旧版 SNAPSHOT 到 `snapshots/`
+
+**核心理念**：文档不是负担，是"战场扫干净"。让下一个接手的人不需要重读所有 commit。

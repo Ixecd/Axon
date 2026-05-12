@@ -1,13 +1,11 @@
-// Axon Protocol — MPC+AA 非托管支付核心
+// Axon Protocol — Feelings Payroll Hub
 //
-// Sprint 1: router + transfer
-// Sprint 2: mpc + paymaster + bridge (tonic gRPC)
+// MVP: identity binding + payroll disbursement
+// Boundary: 工资到账止步，不追踪消费
 
 pub mod error;
+pub mod identity;
+pub mod payroll;
 pub mod router;
-pub mod transfer;
 
-// TODO (sprint 2):
-// pub mod mpc;
-// pub mod paymaster;
-// pub mod bridge;
+// Removed: pub mod transfer (→ payroll)

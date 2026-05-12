@@ -5,10 +5,13 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum AppError {
-    #[error("Invalid transfer: {0}")]
-    InvalidTransfer(String),
+    #[error("Invalid identity: {0}")]
+    InvalidIdentity(String),
 
-    #[error("No route available for this transfer")]
+    #[error("Invalid disbursement: {0}")]
+    InvalidDisburse(String),
+
+    #[error("No route available for this disbursement")]
     NoRoute,
 
     #[error("Internal error: {0}")]
@@ -23,7 +26,8 @@ struct ErrorBody {
 impl IntoResponse for AppError {
     fn into_response(self) -> axum::response::Response {
         let (status, msg) = match &self {
-            AppError::InvalidTransfer(m) => (StatusCode::BAD_REQUEST, m.clone()),
+            AppError::InvalidIdentity(m) => (StatusCode::FORBIDDEN, m.clone()),
+            AppError::InvalidDisburse(m) => (StatusCode::BAD_REQUEST, m.clone()),
             AppError::NoRoute => (StatusCode::SERVICE_UNAVAILABLE, self.to_string()),
             AppError::Internal(_) => (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()),
         };

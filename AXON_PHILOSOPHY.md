@@ -1,54 +1,54 @@
-# Axon Rust 开发哲学 & 规范指南 😈✊
+# Axon Rust 开发哲学 & 规范指南
 
-> 作者：庆春镜像 + DeepSeek | 日期：2026-05-11 | 版本：v2 锐评修正版
-> 核心：**转账引擎 • 炒币壳 • 平台不持不撮** — MPC+AA 非托管核，Rust 铁律执行，像微信但链上杀手。
-> 适用：Axon Protocol (router/mpc/paymaster/bridge)，Rust 1.80+。
+> 作者：庆春镜像 + DeepSeek | 日期：2026-05-13 | 版本：v3 Payroll 修正版
+> 核心：**薪酬支付 • 身份绑定 • 到账止步** — MPC+AA 非托管核，Rust 铁律执行。
+> 适用：Axon Protocol (identity/router/mpc/paymaster/bridge)，Rust 1.80+。
 > 原则：**零自欺** — 代码=产品，债不堆，数字非纳秒迷信是可测边界。
 
 ---
 
-## 零、Axon 是什么 — 聪明的转账引擎
+## 零、Axon 是什么 — Feelings 链上薪酬支付引擎
 
-**核心永不动摇：转账。** 炒币、跨链、支付——全是同一件事的不同壳：`transfer(from, to, amount, chain)`。
+**核心永不动摇：发工资。** Axon 是 Feelings 项目的内部薪酬支付层。`disburse(treasury, empId, amount)` — 把工资从 Feelings 财务地址发到员工/创作者的钱包地址。
 
 ```
 用户看到的              Axon 实际做的
 ─────────────────────────────────────────
-买 ETH              USDC → DEX swap (contract call)
-跨链换币            USDC(Eth) → Bridge → USDC(Polygon)
-提现                MPC 签名 → 链上广播交易
-炒币盈亏            转账历史 × Oracle 价格 = PnL 展示
+员工领工资            treasury → resolve(empId) → transfer (MPC sig)
+创作者分润            收益上链 → 自动结算 → 创作者地址
+跨链发放            Polygon treasury → Bridge → 员工 Arbitrum 钱包
 ```
 
 平台不做的事：
-- **不撮合** — 用户 self-custody order，AA batch sig 提交到链上 DEX
-- **不清算** — 链本身就是结算层，Axon 只是路由 + Gas 代付
-- **不持仓** — 零 CEX 仓位风险，资金始终在用户 AA 钱包
+- **不撮合** — 没有 DEX，没有 order book，没有 trading UI
+- **不跟踪消费** — 工资到账即 Axon 职责结束，员工怎么花无关
+- **不持仓** — 零 CEX 仓位风险，资金从 treasury 直达员工地址
+
+核心边界：**"到账止步。"** 发工资是 Axon 的事，消费是员工自己的事。
 
 架构锚定：
 
 ```
-Axon App (Flutter/Tauri)
-├── UI: Pay / Transfer / Swap (4 接口)
-│   └── Trading Shell: 撮合 view (CLOB UI, 非平台撮合)
-├── Protocol (Rust tonic gRPC)
-│   ├── Transfer Core (MPC sig + paymaster)
-│   └── Router (最优链 + bridge)
-└── Blitz Infra (etcd/JRaft HA)
+Axon Server (Rust tonic gRPC)
+├── Identity Registry   — empId → 地址绑定 (MVP: empId+合同哈希)
+├── Router              — 最优链选择 (Gas cheapest)
+├── MPC Signer          — 企业级签名
+├── Paymaster           — Gas 代付 (员工零 Gas)
+└── Bridge              — 跨链 disbursement
 ```
 
-**转账核**：`POST /transfer` — MPC<200ms，Gas 代付，跨链 Stargate。
-**炒币壳**：app 内 book view，用户自托管 order，平台零风控仓位。
+**身份层**：`POST /bind` — empId + 实名 + 合同哈希 → 钱包地址，存 Registry。
+**发薪核**：`POST /disburse` — resolve(empId) → route → MPC sign → broadcast。到账即止。
 
-风控 bounded（非全 CEX）：
+风控 bounded（企业级 payroll，非交易所）：
 
 | 层 | 风控 | 组件 |
 |----|------|------|
-| 转账核 | 异常 vol/velo/重放 | JRaft 状态 + Aeron alert |
-| 炒币壳 | UI order filter (pos limit) | 撮合 pre-match (local book) |
+| 身份层 | empId 解析失败 → 拒；非活跃员工 → 拒 | EmployeeRegistry |
+| 发薪核 | 异常 vol/velo/重放 | JRaft 状态 + Aeron alert |
 | 清结算 | Gas vault + bridge finality | Oracle 对冲 + multi-sig |
 
-铁文案：**"self-custody，平台不持不撮。"**
+铁文案：**"发薪到账，管发不管花。"**
 
 ---
 
@@ -347,7 +347,9 @@ Sprint 1 策略:
 
 ```
 src/
-├── lib.rs          # pub mod {router,mpc,paymaster,bridge};
+├── lib.rs          # pub mod {identity,payroll,router,error};
+├── identity.rs     # EmployeeRegistry: bind + resolve (empId→address)
+├── payroll.rs      # /bind + /disburse handlers + AppState
 ├── router.rs       # 多链决策 + RPC quorum
 ├── mpc.rs          # 协同签名状态机 + dropout recovery
 ├── paymaster.rs    # Gas vault + pre-est + jitter buffer
@@ -432,19 +434,20 @@ impl Router {
 ## 七、Sprint 铁律
 
 ```
-Sprint 1: router + 单链 tx (axum HTTP → sprint 2 切 tonic)
-  验收: Router score <5ms, RPC quorum 3中2, Gas spike mock, chaos pass
+Sprint 1: identity binding + disbursement (axum HTTP)
+  → EmployeeRegistry bind/resolve, DisburseRequest empId→address→route→sign
+  验收: bind→disburse e2e, empId解析<1ms, unbound reject, Router select <5ms
 
-Sprint 2: MPC sig mock → real GG20, tonic gRPC server
+Sprint 2: MPC sig mock → real GG20, tonic gRPC server, Paymaster gas relay
 
-Sprint 3: Tauri app shell, embed trading chart (DEX API), POST transfer demo
+Sprint 3: Tauri payroll dashboard, batch disbursement view, POST /disburse demo
 
-平台线: POST /transfer — MPC<200ms, Gas代付, 跨链 Stargate
-壳线:   炒币 view (CLOB UI), self-custody order, AA batch sig, 平台不撮
+平台线: POST /disburse — resolve(empId)<1ms, MPC<200ms, Gas代付, 跨链 Stargate
 
 不做的:
-  ✗ 撮合引擎 (链上 DEX 已有)
-  ✗ 清结算系统 (链本身就是)
+  ✗ 撮合引擎 (payroll 不需要)
+  ✗ Swap/DEX (员工自己管消费)
+  ✗ 消费追踪 (边界: 到账止步)
   ✗ CEX 仓位管理 (绝不)
 ```
 
@@ -456,11 +459,11 @@ Sprint 3: Tauri app shell, embed trading chart (DEX API), POST transfer demo
 
 | 层 | 栈 | 理由 |
 |----|----|------|
-| Web | React 18 + Vite + Tailwind | HMR 秒热，组件化 pay UI，trading chart (Recharts/D3)，4 接口 mock |
+| Web | React 18 + Vite + Tailwind | HMR 秒热，payroll dashboard，3 API (bind/disburse/healthz) |
 | Mobile | Capacitor (WebView) + React | iOS/Android 一码双端，plugin (camera/biometric for MPC seed) |
 | Desktop | Tauri v2 (Rust backend + Web frontend) | 5MB 二进制（vs Electron 200MB），Rust tonic client 直连 protocol，file/biometric secure |
-| State/Offline | Zustand + IndexedDB | tx draft / offline sig preview |
-| gRPC Client | `@trpc/client` or `tonic-web` | WebSocket gRPC，protocol `/transfer` stream |
+| State/Offline | Zustand + IndexedDB | payroll batch draft / offline sig preview |
+| gRPC Client | `@trpc/client` or `tonic-web` | WebSocket gRPC，protocol `/disburse` stream |
 
 ### Tauri vs Qt
 
@@ -507,25 +510,25 @@ Sprint 3: Tauri app shell, embed trading chart (DEX API), POST transfer demo
   Scroll:        smooth-scroll anchor
 
 卡片体系:
-  Transfer card:  thumbnail (chain icon) + title (amount) + metadata (gas, route) + score badge
-  Nominee grid:   3-col, uniform aspect ratio (object-fit: cover)
-  Score bento:    metric row (UI/UX/INN → Speed/Cost/Safety)，decimal precision (8.09 not 8)
+  Payroll card:    employee name + empId + amount + chain badge + tx hash
+  Batch grid:      按批次展示 disbursement 记录 (payrollBatchId grouped)
+  Route bento:     metric row (Chain/Gas/Speed)，decimal precision
 
 核原则:
-  "Make the transfer transparent and the data heroic."
-  暗底 → 交易卡片发光 → 数字精确到小数点 → 全链路可溯源
+  "Make every payroll disbursement transparent and auditable."
+  暗底 → 工资卡片发光 → 数字精确到小数点 → 全链路可溯源
 ```
 
 ### Axon 设计映射
 
-| CSSDA 元素 | Axon 等价 |
-|-----------|----------|
-| WOTD monogram (金) | Verified tx badge (金 accent) |
-| Judge score cards | Route score breakdown (Speed/Cost/Safety) |
-| Nominee thumbnail grid | Transfer history cards |
+| CSSDA 元素 | Axon Payroll 等价 |
+|-----------|------------------|
+| WOTD monogram (金) | Disbursement verified badge (金 accent) |
+| Judge score cards | Route score breakdown (Chain/Gas/Speed) |
+| Nominee thumbnail grid | Payroll history cards |
 | Decimal scores (8.09) | Gas cost precision (2 decimal) |
-| Dark gallery frame | Dark financial dashboard |
-| Judge headshot + name | Validator/MPC signer identity |
+| Dark gallery frame | Dark payroll dashboard |
+| Judge headshot + name | Employee identity card (empId + 实名) |
 
 ### 暖调诗歌 — Onboarding & 品牌层
 
@@ -541,7 +544,7 @@ Sprint 3: Tauri app shell, embed trading chart (DEX API), POST transfer demo
 
 品牌层 vs Dashboard 层:
   Onboarding/Landing/Profile → 暖调 (RabenRifaie)：诗意，人性，画廊漫步
-  Dashboard/Trading/History  → 暗底 (CSSDA)：精密，策展，数据发光
+  Dashboard/Payroll/History  → 暗底 (CSSDA)：精密，策展，数据发光
 
 字体分层:
   Brand:    Playfair Display (serif hero — "Send value, not transactions")
@@ -607,8 +610,8 @@ Tauri bundle：`tauri.conf.json` → `assets/fonts/` 本地化，三文件 <500K
 | 场景 | 模式 | 参考 | 色彩 | 情绪 |
 |------|------|------|------|------|
 | Landing / Onboarding | 暖调画廊 | RabenRifaie | sage + clay + warm white | 人性、信任、低门槛 |
-| Dashboard / History | 暗底策展 | CSSDA | near-black + gold/teal | 精密、透明、可审计 |
-| Transfer confirm | 暖→暗过渡 | 两者融合 | 提交前暖，确认后暗底卡片 | 仪式感：签名=承诺 |
+| Dashboard / Payroll | 暗底策展 | CSSDA | near-black + gold/teal | 精密、透明、可审计 |
+| Disburse confirm | 暖→暗过渡 | 两者融合 | 提交前暖，确认后暗底卡片 | 仪式感：发薪=承诺 |
 
 ---
 

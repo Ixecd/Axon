@@ -1,0 +1,30 @@
+feat(payroll): Axon scope narrows to Feelings Payroll Hub — identity binding + disburse
+
+砍掉 "全场景Web3中枢" 定位，收窄到 Feelings 链上薪酬支付。边界：到账止步。
+
+身份层 (src/identity.rs):
+  EmployeeRegistry — empId→实名→钱包地址绑定 MVP
+  RwLock<HashMap> 内存存储，Arc shared state，Clone safe
+  验证: bind(empId/name/address/contractHash) → resolve(empId) → active check
+  inactive/unbound → 403 forbidden
+
+发薪核 (src/payroll.rs → 原 transfer.rs):
+  POST /bind      — 员工身份绑定 (用工合同→地址)
+  POST /disburse  — payroll disbursement: resolve→route→sign→broadcast
+  DisburseRequest — empId 替代裸地址，可选 payrollBatchId (审计用)
+  DisburseResponse — txHash + empAddress + auditUrl (IPFS)
+  Paymaster gasPaid=true 默认 (员工零 Gas)
+
+删除:
+  src/transfer.rs  — 裸地址 transfer (无身份锚点)
+  Swap/CLOB/trading — 炒币壳整条线砍掉 ("员工怎么花无关")
+
+文档:
+  README.md            — 重写: 起源故事 + 极简哲学 + 边界表
+  AXON_PHILOSOPHY.md   — §0/§7/§8 重写: 砍壳线, 加身份层, 收窄边界
+
+测试 (7/7 pass, clippy clean):
+  bind_and_resolve / resolve_inactive_fails / resolve_unknown_fails
+  bind_missing_fields
+  disburse_to_bound_employee / disburse_unbound_employee_fails
+  disburse_zero_amount_fails

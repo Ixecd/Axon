@@ -1,0 +1,14 @@
+feat(future): F3 user-custom theme engine with 6-layer fixed/custom architecture
+
+审美=认知投影，强制统一=低配牢笼。框架钉死，皮肤开放。
+
+六层定/开架构:
+  框架   Leptos/React 二选一 (v0.4 评估)     — 定死
+  布局   Grid/Flex 骨架 → 拖拽/JSON config    可 custom
+  样式   Tailwind CSS vars → 主题 JSON         可 custom
+  颜色   8色语义 → Palette picker              可 custom
+  i18n   Fluent 引擎 → 用户 lang pack 上传      可 custom
+  扩展   Plugin slots → JS snippet 沙箱         可 custom
+
+防乱: 主题校验 + 沙箱隔离 + 降级链, 三级防御
+三阶段: 主题引擎 → RTL+Fluent → Plugin+社区市场

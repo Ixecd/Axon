@@ -1,0 +1,11 @@
+docs(rust): RUST.md — 迭代器→解引用→引用本质→闭包→内存管理→环境变量
+
+从 C++ 到 Rust 的关键跳跃, 涵盖:
+  §1 迭代器: trait/三种创建/惰性求值/适配器vs消耗型/for底层/性能
+  §2 解引用: 算术/fro/println! 谁解谁不解, 引用和指针界限
+  §3 引用本质: T* const vs const T*
+  §4 闭包: 函数vs闭包/C++ lambda对应/三种捕获模式(Fn/FnMut/FnOnce)/move≠[=]/|&x|
+  §5 内存管理: RAII+裸指针悬垂/SPSC无锁队列+eventfd
+  §6 环境变量: 性价比分析, 地板非天花板
+
+Co-Authored-By: DeepSeek <deepseek@axon-protocol.ai>

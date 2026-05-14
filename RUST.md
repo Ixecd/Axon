@@ -213,6 +213,81 @@ let f = move || println!("{}", s);
 
 `|&x|` 就是为了少写一层引用。它不是语法糖——它真的在匹配 `&&i32` 的形状。
 
+### 返回闭包：`impl Fn` vs `Box<dyn Fn>`
+
+```rust
+// impl Fn — 静态分发，零运行时开销
+fn make_adder(x: i32) -> impl Fn(i32) -> i32 {
+    move |y| x + y
+}
+
+// Box<dyn Fn> — 动态分发，运行时走 vtable
+fn make_adder_boxed(x: i32) -> Box<dyn Fn(i32) -> i32> {
+    Box::new(move |y| x + y)
+}
+```
+
+```
+impl Fn(i32) -> i32              Box<dyn Fn(i32)> -> i32
+─────────────────────────────────────────────────────────
+静态分发，编译时单态化               动态分发，运行时 vtable
+零运行时开销                        堆分配 + 8 字节跳转
+返回的闭包类型在编译期确定              类型擦除，可以返回不同类型
+不能存多种闭包                       同签名闭包随意存
+二进制膨胀（每调用点一份代码）              二进制不膨胀
+```
+
+**什么时候用哪个：**
+
+```rust
+// 99% 的场景：返回单一闭包，零开销
+fn make_adder(x: i32) -> impl Fn(i32) -> i32 {
+    move |y| x + y
+}
+
+// 需要运行时选择不同闭包时才用 Box<dyn>
+fn select_adder(kind: &str, x: i32) -> Box<dyn Fn(i32) -> i32> {
+    match kind {
+        "add" => Box::new(move |y| x + y),
+        "mul" => Box::new(move |y| x * y),
+        _     => Box::new(move |y| y),
+        // 不同闭包 → 不同类型 → 必须擦除
+    }
+}
+```
+
+`impl Trait` 在返回值位置只是语法糖——编译器生成一个具体的匿名类型。需要运行时差异化返回时，只有 `Box<dyn>` 能接。
+
+### 闭包和多线程
+
+闭包天然适合多线程——捕获所需数据，`move` 转移所有权进线程：
+
+```rust
+use std::thread;
+
+let nums = vec![1, 2, 3, 4, 5];
+let handles = nums.into_iter().map(|num| {
+    thread::spawn(move || {
+        num * 2  // num 所有权被移进线程
+    })
+}).collect::<Vec<_>>();
+
+for handle in handles {
+    let result = handle.join().unwrap();
+    println!("Result: {}", result);
+}
+```
+
+`move` 在这里是关键——不 move，闭包捕获的是 `num` 的引用，活不过 `thread::spawn`。
+
+### 闭包和性能
+
+闭包是零成本抽象。Rust 编译器会为每个闭包生成独立的匿名类型，调用时直接内联——机器码和手写函数一致，没有虚调用开销（除非你显式用 `Box<dyn Fn>`）。
+
+### 闭包和生命周期
+
+闭包捕获的变量受生命周期系统保护——闭包不会比它捕获的任何变量活得更长。这是编译器静态保证的：悬垂闭包连编译都过不了，不需要运行时检查。
+
 ---
 
 ## 五、内存管理：RAII + 所有权

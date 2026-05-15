@@ -297,7 +297,116 @@ for handle in handles {
 
 ---
 
-## 五、内存管理：RAII + 所有权
+## 五、String 和 `&str`
+
+概念上和 C++ 的 `std::string` / `const char*` 一一对应：
+
+```
+Rust            C++
+────────────────────────────
+String     →    std::string   拥有数据，堆分配，可扩容
+&str       →    const char*   不拥有数据，只是借用/指向
+```
+
+但三个关键差异：
+
+### 1. `&str` 是胖指针，`const char*` 是瘦指针
+
+`&str` 内部存了 `(指针, 长度)`，不需要 `\0` 终止符——`str.len()` 是 O(1)。`const char*` 只有指针，靠 `\0` 判断结尾，`strlen` 是 O(n)。
+
+### 2. `&str` 保证合法 UTF-8，`const char*` 不保证
+
+```rust
+let s = String::from("🦀");  // 4 bytes, 1 char, 编译器确保合法 UTF-8
+// 而 const char* 可以是 GBK / Latin1 / 任何编码
+```
+
+### 3. `&str` 有生命周期，`const char*` 是裸指针
+
+```cpp
+// C++ — 悬垂指针，编译器不报
+const char* p;
+{
+    std::string s = "hi";
+    p = s.c_str();
+}
+puts(p);  // 💥 use-after-free
+```
+
+```rust
+// Rust — 编译器拒绝
+let p: &str;
+{
+    let s = String::from("hi");
+    p = &s;
+}
+// println!("{}", p);  // ❌ s 活得不够长
+```
+
+**总结**：所有权维度一样，类型系统维度完全不同。这个类比适合快速建立直觉，但不适合用来推理 Rust 的借用规则。
+
+---
+
+## 六、数组 vs Vec
+
+### `[T; N]` 和 `Vec<T>` 的底层差别
+
+```
+[T; N]（数组）           Vec<T>
+──────────────────────────────────────────
+栈上分配，大小编译期确定       堆上分配，可扩容运行时
+大小是类型的一部分            大小是运行时值
+[1; 100] 栈上放              100 个元素 = 堆分配
+```
+
+### 切片是统一抽象层
+
+`&[T]` 是数组和 Vec 的**共同抽象**——类似 C++20 `std::span`：
+
+```rust
+let arr = [1, 3, 5, 7, 9];
+let v = vec![1, 3, 5, 7, 9];
+
+let part_arr = &arr[0..3];  // &[i32]
+let part_vec = &v[0..3];    // &[i32] — 同一种类型
+```
+
+这两行得到的切片类型完全一样，`.iter()`、`.len()` 行为一致。所以函数参数写 `&[T]`，数组和 Vec 都能传。
+
+### `into_iter()` 有坑
+
+```rust
+let arr = [1, 2, 3];
+let v = vec![1, 2, 3];
+
+// arr.into_iter() — 不会消费数组，迭代 &i32
+// 因为 [i32; 3] 没有实现 IntoIterator，编译器退而求其次用迭代引用
+for i in arr.into_iter() { println!("{}", i); }
+println!("{:?}", arr); // ✅ 还能用
+
+// v.into_iter() — 消费 Vec，迭代 i32
+for i in v.into_iter() { println!("{}", i); }
+// println!("{:?}", v); // ❌ v 已经被消费
+```
+
+根源：数组用 `.iter()` 或 `&arr` 迭代引用，Vec 用 `.into_iter()` 拿走所有权。显式写法最安全——想迭代就 `.iter()`，想消费就 `.into_iter()`，数组和 Vec 行为一致：
+
+```rust
+for i in arr.iter() { /* &i32 */ }   // 不消费
+for i in v.iter() { /* &i32 */ }     // 不消费
+for i in arr.into_iter() { /* i32 */ if arr: [i32;3] */ }  // 见上
+for i in v.into_iter() { /* i32 */ } // Vec 被消费
+```
+
+### 什么时候用哪个
+
+- 数量固定且编译期已知 → `[T; N]`，零堆分配
+- 数量运行时确定 / 需要 grow / push → `Vec<T>`
+- 函数参数只读不拥有 → `&[T]`，数组和 Vec 都能传
+
+---
+
+## 七、内存管理：RAII + 所有权
 
 ### 裸指针 vs shared_ptr
 
@@ -321,7 +430,7 @@ mBase[fd] = eb;  // 引用计数 +1，对象活到 erase 为止
 
 ---
 
-## 六、环境变量存密钥
+## 八、环境变量存密钥
 
 环境变量不是绝对安全——是工程上性价比最高的方案：
 

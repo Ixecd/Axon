@@ -122,22 +122,29 @@ Rust 把模糊都替你管住了，`.` 自动解引用、模式匹配拆引用�
 
 ---
 
-## 三、引用的本质：`T* const`
+## 三、引用的本质：`const T* const`
 
-C++ 里的引用本质是指针常量，不是常量指针：
+Rust 的 `&T` 既是"指针常量"也是"常量指针"——不能改指向，也不能通过它修改值：
 
-```cpp
-// 引用 — 本质是这个
-int* const ref_like = &x;   // 指针本身是常量，不能指向别处
-*ref_like = 20;             // ✅ 指向的值可以改
-
-// 常量指针 — 不是引用
-const int* ptr = &x;        // 指针本身可以变
-ptr = &y;                   // ✅
-// *ptr = 30;               // ❌ 指向的值不能改
+```rust
+let s1 = String::from("run");
+let s2 = &s1;
+// s2.push_str("oob");  // ❌ &T 禁止修改借用的值
 ```
 
-引用 = `T* const` 的语法糖。`const T&` = `const T* const`。
+```cpp
+// C++ 引用 — T* const（指针常量）
+int* const ref_like = &x;   // 指针本身不能变
+*ref_like = 20;             // ✅ 可以通过它改值
+
+// C++ const 引用 — const T* const
+const int* const cref = &x; // 指针不能变，值也不能改
+
+// Rust &T — 行为和 const T* const 一致
+// Rust &mut T — 行为和 T* const 一致
+```
+
+C++ 里 `int&` 默认可改值，加 `const` 才禁。Rust 反过来——`&T` 默认不可改，加 `mut` 才放行。
 
 ---
 

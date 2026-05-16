@@ -509,7 +509,77 @@ unwrap / expect     → 仅用于"不应该为 None"的断言，不在业务逻�
 
 ---
 
-## 九、环境变量存密钥
+## 九、mod 即 namespace：边界从建议变铁律
+
+### 直白类比
+
+```rust
+// Rust                          // C++
+mod payroll {                    namespace payroll {
+    pub fn send() { ... }            void send() { ... }
+    fn helper() { ... }              void helper() { ... }
+}                                }
+```
+
+同一个东西——组织代码、隔离命名。但两个关键差异：
+
+### 差异一：默认私有 vs 默认公开
+
+```rust
+// Rust — 默认私有，pub 才放出去
+mod payroll {
+    fn helper() { ... }    // 外部不可见
+    pub fn send() { ... }  // 外部可见
+}
+
+// C++ — 没有访问控制
+namespace payroll {
+    void helper();   // 外部可见（头文件声明即公开）
+    void send();     // 外部可见
+}
+```
+
+C++ namespace 是纯命名空间，不管可见性。Rust `mod` 是一道硬边界——默认全关，`pub` 才开门。
+
+### 差异二：路径 = 文件结构
+
+```
+C++
+    #include "payroll/sender.h"  →  命名空间和文件路径无关
+    同一个 namespace 可以散落在文件系统任何角落
+
+Rust
+    mod payroll;     →  编译器强制找 payroll.rs 或 payroll/mod.rs
+    路径就是文件系统，不对应就编译不过
+```
+
+C++ 的 `#include` 不关心目录结构。Rust 的 `mod` 强制一一映射——文件在哪，模块就在哪。这不是限制，是帮你管住了"文件放哪都行导致的混乱"。
+
+### 多文件模块
+
+```rust
+// Rust — 一个目录就是一个模块
+payroll/
+├── mod.rs        // 模块入口，声明子模块
+├── sender.rs     // pub mod sender;
+└── receiver.rs   // pub mod receiver;
+
+// C++ — 没有这种概念
+// 全看 #include 怎么写
+```
+
+### Axon 的约定
+
+```
+一个模块一个文件       → payroll.rs
+复杂模块一个目录       → payroll/mod.rs + payroll/*.rs
+子模块声明在 mod.rs   → pub mod sender; pub mod receiver;
+不深层嵌套            → 最多两层，src/模块/子模块.rs
+```
+
+---
+
+## 十、环境变量存密钥
 
 环境变量不是绝对安全——是工程上性价比最高的方案：
 

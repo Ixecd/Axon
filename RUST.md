@@ -430,7 +430,86 @@ mBase[fd] = eb;  // 引用计数 +1，对象活到 erase 为止
 
 ---
 
-## 八、环境变量存密钥
+## 八、Option 与 null：不存在的值不该存在
+
+### 哲学
+
+Rust 没有 null。不是删掉了，是从类型系统层面把"空"变成了一个可检查的状态。
+
+```
+C++                            Rust
+────────────────────────────────────────────────
+int* p = nullptr;               Option<&T>  — 不存在的引用
+std::optional<T> (C++17)        Option<T>   — 不存在的值
+返回 -1 / nullptr 表示错误        Result<T, E> — 用类型承载错误
+```
+
+Axon 对 null 的态度：**null 不在语言里，Option 在类型里。不存在的东西，编译器帮你记着。**
+
+### 基本用法
+
+```rust
+// Some / None
+let x: Option<i32> = Some(42);
+let y: Option<i32> = None;
+
+// match 穷尽
+match x {
+    Some(v) => println!("有值: {}", v),
+    None => println!("空"),
+}
+
+// if let — 只关心有值的情况
+if let Some(v) = x {
+    println!("有值: {}", v);
+}
+```
+
+### 常用方法链
+
+```rust
+// unwrap — 开发调试用，None 会 panic
+let v = Some(42).unwrap();  // 42
+
+// unwrap_or — 给默认值
+let v = None.unwrap_or(0);  // 0
+
+// map — 有值才变换
+let len = Some("hi").map(|s| s.len());  // Some(2)
+let len = None.map(|s: &str| s.len());  // None
+
+// and_then — 链式处理，任一步 None 则短路
+fn parse(s: &str) -> Option<i32> { s.parse().ok() }
+let result = Some("42").and_then(parse);  // Some(42)
+let result = None.and_then(parse);        // None
+```
+
+### 和 Result 的关系
+
+Option 是"可能有也可能没有"，Result 是"要么对要么错"。前者用于值缺失，后者用于操作失败。两者可以互转：
+
+```rust
+// Option → Result: 给 None 一个错误
+let v = opt.ok_or(anyhow::anyhow!("缺失必填字段"))?;
+
+// Result → Option: 丢掉错误信息
+let v = result.ok();  // Err → None
+```
+
+### Axon 的约定
+
+```
+函数返回可选值      → Option<T>，不用 null / -1 / 空字符串
+函数可能失败        → Result<T, E>，不用异常
+Option 链式处理      → map / and_then / unwrap_or，不写 match 套 match
+unwrap / expect     → 仅用于"不应该为 None"的断言，不在业务逻辑用
+```
+
+一个你 C++ optional 实现里写了但 Rust 标准库已经做好的——`and_then`、`transform`（Rust 叫 `map`）、`or_else`、值判等——在 Rust 里都是 `Option<T>` 自带。不需要自己造。
+
+---
+
+## 九、环境变量存密钥
 
 环境变量不是绝对安全——是工程上性价比最高的方案：
 
